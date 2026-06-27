@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Real-time collaborative GIS platform for interactive mapping, GeoJSON editing, and live synchronization across multiple users.">
+    <title>GeoSync — Real-time Collaborative Maps</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- App CSS -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-globe">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                    <path d="M2 12h20"/>
+                </svg>
+            </div>
+            <h1 class="loading-title">GeoSync</h1>
+            <p class="loading-subtitle" data-i18n="loading_subtitle">Initializing collaborative maps...</p>
+            <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app" class="app-container hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <!-- Sidebar Header -->
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-icon">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+                            <path d="M2 12h20"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="brand-title">GeoSync</h1>
+                        <span class="brand-badge" data-i18n="brand_badge">LIVE</span>
+                    </div>
+                </div>
+                <button id="sidebar-close-btn" class="icon-btn" title="Close sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+            </div>
+
+            <!-- Connected Users -->
+            <div class="sidebar-section" id="users-section">
+                <div class="section-header">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span data-i18n="connected_users">Connected Users</span>
+                </div>
+                <div class="users-bar">
+                    <div class="user-avatars" id="user-avatars"></div>
+                    <span class="user-count" id="user-count">1 <span data-i18n="online">online</span></span>
+                </div>
+            </div>
+
+            <!-- Layer Controls -->
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+                    <span data-i18n="layers">Layers</span>
+                    <span class="layer-count-badge" id="layer-count-badge">0</span>
+                </div>
+                <div class="layer-actions">
+                    <button id="import-geojson-btn" class="action-btn primary-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                        <span data-i18n="import_geojson">Import GeoJSON</span>
+                    </button>
+                    <button id="add-marker-btn" class="action-btn secondary-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <span data-i18n="add_marker">Add Marker</span>
+                    </button>
+                </div>
+                <div class="layers-list" id="layers-list">
+                    <div class="empty-state" id="layers-empty">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>
+                        <p data-i18n="no_layers">No layers yet</p>
+                        <p class="empty-hint" data-i18n="import_hint">Import a GeoJSON file to get started</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Markers Section -->
+            <div class="sidebar-section">
+                <div class="section-header">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <span data-i18n="markers">Markers</span>
+                    <span class="layer-count-badge" id="marker-count-badge">0</span>
+                </div>
+                <div class="markers-list" id="markers-list">
+                    <div class="empty-state" id="markers-empty">
+                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <p data-i18n="no_markers">No markers yet</p>
+                        <p class="empty-hint" data-i18n="marker_hint">Click "Add Marker" then click on the map</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar Footer -->
+            <div class="sidebar-footer">
+                <button id="lang-toggle-btn" class="lang-toggle" title="Switch Language">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                    <span id="lang-label">العربية</span>
+                </button>
+                <div class="footer-info">
+                    <span class="version">v1.0</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Map Area -->
+        <main class="map-area">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <button id="sidebar-toggle-btn" class="icon-btn glass-btn" title="Toggle Sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+                </button>
+                <div class="search-bar glass-panel">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input type="text" id="search-input" data-i18n-placeholder="search_placeholder" placeholder="Search location...">
+                </div>
+                <div class="top-bar-actions">
+                    <div class="coordinates-display glass-panel" id="coordinates-display">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="22"/></svg>
+                        <span id="coords-text">0.0000, 0.0000</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Map Container -->
+            <div id="map" class="map-container"></div>
+
+            <!-- Map Layer Switcher -->
+            <div class="layer-switcher glass-panel" id="layer-switcher">
+                <button class="layer-switch-btn active" data-layer="street" title="Street Map">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 7 17l-5-1 1-5L14 0"/><path d="m22 2-6 6"/></svg>
+                    <span data-i18n="street">Street</span>
+                </button>
+                <button class="layer-switch-btn" data-layer="satellite" title="Satellite">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                    <span data-i18n="satellite">Satellite</span>
+                </button>
+                <button class="layer-switch-btn" data-layer="dark" title="Dark">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                    <span data-i18n="dark">Dark</span>
+                </button>
+                <button class="layer-switch-btn" data-layer="terrain" title="Terrain">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m8 3 4 8 5-5 5 15H2L8 3z"/></svg>
+                    <span data-i18n="terrain">Terrain</span>
+                </button>
+            </div>
+
+            <!-- Floating Toolbar -->
+            <div class="floating-toolbar glass-panel" id="floating-toolbar">
+                <button class="tool-btn" id="tool-zoom-in" title="Zoom In">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/></svg>
+                </button>
+                <button class="tool-btn" id="tool-zoom-out" title="Zoom Out">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="8" x2="14" y1="11" y2="11"/></svg>
+                </button>
+                <div class="tool-divider"></div>
+                <button class="tool-btn" id="tool-locate" title="My Location">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h3"/><path d="M19 12h3"/><path d="M12 2v3"/><path d="M12 19v3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="tool-btn" id="tool-fullscreen" title="Fullscreen">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                </button>
+            </div>
+
+            <!-- Marker Mode Indicator -->
+            <div class="marker-mode-indicator hidden" id="marker-mode-indicator">
+                <div class="indicator-content glass-panel">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <span data-i18n="click_to_place">Click on the map to place a marker</span>
+                    <button id="cancel-marker-mode" class="cancel-btn" data-i18n="cancel">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Toast Notifications -->
+            <div class="toast-container" id="toast-container"></div>
+        </main>
+    </div>
+
+    <!-- GeoJSON File Input (hidden) -->
+    <input type="file" id="geojson-file-input" accept=".geojson,.json" style="display:none">
+
+    <!-- Marker Edit Modal -->
+    <div class="modal-overlay hidden" id="marker-modal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3 data-i18n="edit_marker">Edit Marker</h3>
+                <button class="icon-btn" id="close-marker-modal">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label data-i18n="marker_title">Title</label>
+                    <input type="text" id="marker-title-input" data-i18n-placeholder="marker_title_placeholder" placeholder="Enter marker title...">
+                </div>
+                <div class="form-group">
+                    <label data-i18n="marker_description">Description</label>
+                    <textarea id="marker-desc-input" rows="3" data-i18n-placeholder="marker_desc_placeholder" placeholder="Enter description..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="action-btn secondary-btn" id="delete-marker-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    <span data-i18n="delete">Delete</span>
+                </button>
+                <button class="action-btn primary-btn" id="save-marker-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                    <span data-i18n="save">Save</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Layer Style Modal -->
+    <div class="modal-overlay hidden" id="layer-style-modal">
+        <div class="modal glass-panel">
+            <div class="modal-header">
+                <h3 data-i18n="layer_style">Layer Style</h3>
+                <button class="icon-btn" id="close-style-modal">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label data-i18n="layer_name">Layer Name</label>
+                    <input type="text" id="style-layer-name" placeholder="Layer name...">
+                </div>
+                <div class="form-group">
+                    <label data-i18n="stroke_color">Stroke Color</label>
+                    <div class="color-input-row">
+                        <input type="color" id="style-stroke-color" value="#3b82f6">
+                        <input type="text" id="style-stroke-color-text" value="#3b82f6" class="color-text-input">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="fill_color">Fill Color</label>
+                    <div class="color-input-row">
+                        <input type="color" id="style-fill-color" value="#3b82f6">
+                        <input type="text" id="style-fill-color-text" value="#3b82f6" class="color-text-input">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="opacity">Opacity</label>
+                    <div class="slider-row">
+                        <input type="range" id="style-opacity" min="0" max="100" value="70" class="styled-slider">
+                        <span id="style-opacity-value">70%</span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="stroke_weight">Stroke Weight</label>
+                    <div class="slider-row">
+                        <input type="range" id="style-weight" min="1" max="10" value="2" class="styled-slider">
+                        <span id="style-weight-value">2px</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="action-btn secondary-btn" id="delete-layer-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                    <span data-i18n="delete_layer">Delete Layer</span>
+                </button>
+                <button class="action-btn primary-btn" id="save-style-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span data-i18n="apply_style">Apply</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="i18n.js"></script>
+    <script src="firebase-config.js"></script>
+    <script src="map-manager.js"></script>
+    <script src="layer-manager.js"></script>
+    <script src="geojson-import.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
