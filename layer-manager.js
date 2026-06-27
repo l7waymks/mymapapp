@@ -1,69 +1,133 @@
 // layer-manager.js
 class LayerManager {
-    constructor(mapManager, db) {
+    constructor(mapManager) {
         this.mapManager = mapManager;
-        this.db = db;
+        this.supabase = window.supabaseClient;
         this.layers = new Map(); // id -> data
         this.leafletLayers = new Map(); // id -> L.GeoJSON
         this.markers = new Map(); // id -> data
         this.leafletMarkers = new Map(); // id -> L.Marker
         
-        this.unsubscribeLayers = null;
-        this.unsubscribeMarkers = null;
-
         this.init();
     }
 
-    init() {
-        if (!this.db) {
-            console.error('Firestore DB not initialized');
+    async init() {
+        if (!this.supabase) {
+            console.error("Supabase client not initialized.");
+            window.showToast("Database not connected", true);
             return;
         }
 
-        // Start listening to collections
-        this.listenToLayers();
-        this.listenToMarkers();
+        // 1. Fetch initial state
+        await this.fetchInitialData();
+
+        // 2. Setup Realtime Subscriptions
+        this.setupRealtimeSubscriptions();
     }
 
-    // --- Layers (GeoJSON) ---
+    async fetchInitialData() {
+        try {
+            // Fetch Layers
+            const { data: layersData, error: layersErr } = await this.supabase
+                .from('layers')
+                .select('*');
+            
+            if (layersErr) throw layersErr;
 
-    listenToLayers() {
-        this.unsubscribeLayers = this.db.collection('layers').onSnapshot((snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                const data = { id: change.doc.id, ...change.doc.data() };
+            if (layersData) {
+                const isFirstLoad = this.layers.size === 0;
+                layersData.forEach(layer => {
+                    this.layers.set(layer.id, layer);
+                    this.renderLayer(layer);
+                });
                 
-                if (change.type === 'added' || change.type === 'modified') {
-                    this.layers.set(data.id, data);
-                    this.renderLayer(data);
-                    this.updateLayerUI();
+                if (isFirstLoad && layersData.length > 0) {
+                    this.fitAllLayers();
                 }
-                if (change.type === 'removed') {
-                    this.removeLayer(data.id);
-                    this.updateLayerUI();
-                }
-            });
-        }, (error) => {
-            console.error("Error listening to layers: ", error);
-        });
+                this.updateLayerUI();
+            }
+
+            // Fetch Markers
+            const { data: markersData, error: markersErr } = await this.supabase
+                .from('markers')
+                .select('*');
+            
+            if (markersErr) throw markersErr;
+
+            if (markersData) {
+                markersData.forEach(marker => {
+                    this.markers.set(marker.id, marker);
+                    this.renderMarker(marker);
+                });
+                this.updateMarkerUI();
+            }
+
+        } catch (err) {
+            console.error("Error fetching initial Supabase data:", err);
+            window.showToast("Failed to load map data", true);
+        }
     }
 
-    async renderLayer(layerData, localFeatures = null) {
+    setupRealtimeSubscriptions() {
+        // Subscribe to public:layers changes
+        this.supabase
+            .channel('public:layers')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'layers' }, payload => {
+                this.handleLayerChange(payload);
+            })
+            .subscribe();
+
+        // Subscribe to public:markers changes
+        this.supabase
+            .channel('public:markers')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'markers' }, payload => {
+                this.handleMarkerChange(payload);
+            })
+            .subscribe();
+    }
+
+    handleLayerChange(payload) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            this.layers.set(newRecord.id, newRecord);
+            this.renderLayer(newRecord);
+            this.updateLayerUI();
+        } else if (eventType === 'DELETE') {
+            this.removeLayerLocal(oldRecord.id);
+            this.updateLayerUI();
+        }
+    }
+
+    handleMarkerChange(payload) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            this.markers.set(newRecord.id, newRecord);
+            this.renderMarker(newRecord);
+            this.updateMarkerUI();
+        } else if (eventType === 'DELETE') {
+            this.removeMarkerLocal(oldRecord.id);
+            this.updateMarkerUI();
+        }
+    }
+
+    // --- Layers ---
+    
+    renderLayer(layerData) {
         let leafletLayer = this.leafletLayers.get(layerData.id);
         
-        // Setup style function
         const style = {
             color: layerData.style?.color || '#3b82f6',
             weight: layerData.style?.weight || 2,
             opacity: (layerData.style?.opacity || 70) / 100,
             fillColor: layerData.style?.fillColor || '#3b82f6',
-            fillOpacity: (layerData.style?.opacity || 70) / 100 * 0.5 // fill usually a bit more transparent
+            fillOpacity: (layerData.style?.opacity || 70) / 100 * 0.5
         };
 
         if (leafletLayer) {
-            // Update style
             leafletLayer.setStyle(style);
             
-            // Check visibility
             if (layerData.visible && !this.mapManager.map.hasLayer(leafletLayer)) {
                 this.mapManager.map.addLayer(leafletLayer);
             } else if (!layerData.visible && this.mapManager.map.hasLayer(leafletLayer)) {
@@ -72,6 +136,7 @@ class LayerManager {
             return;
         }
 
+        // Create new layer
         leafletLayer = L.geoJSON(null, {
             style: style,
             pointToLayer: (feature, latlng) => {
@@ -97,41 +162,61 @@ class LayerManager {
         
         this.leafletLayers.set(layerData.id, leafletLayer);
 
-        // If local features are provided, use them immediately and skip Firestore fetch
-        if (localFeatures) {
-            leafletLayer.addData({
-                type: "FeatureCollection",
-                features: localFeatures
-            });
-            try {
-                this.mapManager.map.fitBounds(leafletLayer.getBounds());
-            } catch(e){}
-            return;
+        let features = layerData.features || [];
+        // Support both compressed array format and regular GeoJSON format (for safety)
+        if (features.length > 0 && Array.isArray(features[0])) {
+            features = this.decompressFeatures(features);
         }
 
-        // Fetch features from Firestore
-        try {
-            const featuresSnapshot = await this.db.collection('layers').doc(layerData.id).collection('features').get();
-            const features = [];
-            featuresSnapshot.forEach(doc => {
-                features.push(doc.data());
+        if (features.length > 0) {
+            leafletLayer.addData({
+                type: "FeatureCollection",
+                features: features
             });
-            
-            if (features.length > 0) {
-                leafletLayer.addData({
-                    type: "FeatureCollection",
-                    features: features
-                });
-                
-                // Only zoom to bounds if it's newly added and we want to focus it
-                // this.mapManager.map.fitBounds(leafletLayer.getBounds());
-            }
-        } catch (error) {
-            console.error("Error fetching features for layer", layerData.id, error);
         }
     }
 
-    removeLayer(id) {
+    decompressFeatures(compressed) {
+        if (!compressed) return [];
+        const typeMap = { 1: 'Point', 2: 'LineString', 3: 'Polygon', 4: 'MultiPolygon' };
+        return compressed.map(c => {
+            const type = typeMap[c[0]];
+            if (!type) return null;
+            
+            const properties = { name: c[2] || '' };
+            if (c[3]) {
+                Object.assign(properties, c[3]);
+            }
+
+            return {
+                type: "Feature",
+                geometry: {
+                    type: type,
+                    coordinates: c[1]
+                },
+                properties: properties
+            };
+        }).filter(Boolean);
+    }
+
+    fitAllLayers() {
+        try {
+            const activeLayers = Array.from(this.leafletLayers.values()).filter(layer => 
+                this.mapManager.map.hasLayer(layer)
+            );
+            if (activeLayers.length === 0) return;
+            
+            const group = new L.FeatureGroup(activeLayers);
+            const bounds = group.getBounds();
+            if (bounds.isValid()) {
+                this.mapManager.map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        } catch(e) {
+            console.error("Error fitting bounds:", e);
+        }
+    }
+
+    removeLayerLocal(id) {
         const leafletLayer = this.leafletLayers.get(id);
         if (leafletLayer) {
             this.mapManager.map.removeLayer(leafletLayer);
@@ -140,27 +225,51 @@ class LayerManager {
         this.layers.delete(id);
     }
 
+    async toggleLayerVisibility(id, visible) {
+        try {
+            const { error } = await this.supabase
+                .from('layers')
+                .update({ visible: visible })
+                .eq('id', id);
+            
+            if (error) throw error;
+        } catch (err) {
+            console.error("Error toggling layer visibility:", err);
+            window.showToast("Failed to toggle visibility", true);
+        }
+    }
+
     async deleteLayerFromDb(id) {
         try {
-            // Note: In Firestore, deleting a doc doesn't delete subcollections automatically.
-            // For a robust app, use a Cloud Function or batch delete features first.
-            // Here we just delete the main doc for simplicity.
-            await this.db.collection('layers').doc(id).delete();
+            const { error } = await this.supabase
+                .from('layers')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
             return true;
-        } catch (error) {
-            console.error("Error deleting layer", error);
+        } catch (err) {
+            console.error("Error deleting layer:", err);
+            window.showToast("Failed to delete layer", true);
             return false;
         }
     }
 
-    async updateLayerStyle(id, styleData) {
+    async updateLayerStyle(id, styleData, name) {
         try {
-            await this.db.collection('layers').doc(id).update({
-                style: styleData
-            });
+            const updates = { style: styleData };
+            if (name) updates.name = name;
+
+            const { error } = await this.supabase
+                .from('layers')
+                .update(updates)
+                .eq('id', id);
+            
+            if (error) throw error;
             return true;
-        } catch (error) {
-            console.error("Error updating layer style", error);
+        } catch (err) {
+            console.error("Error updating layer style:", err);
+            window.showToast("Failed to update style", true);
             return false;
         }
     }
@@ -173,57 +282,27 @@ class LayerManager {
 
     // --- Markers ---
 
-    listenToMarkers() {
-        this.unsubscribeMarkers = this.db.collection('markers').onSnapshot((snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-                const data = { id: change.doc.id, ...change.doc.data() };
-                
-                if (change.type === 'added' || change.type === 'modified') {
-                    this.markers.set(data.id, data);
-                    this.renderMarker(data);
-                    this.updateMarkerUI();
-                }
-                if (change.type === 'removed') {
-                    this.removeMarker(data.id);
-                    this.updateMarkerUI();
-                }
-            });
-        }, (error) => {
-            console.error("Error listening to markers: ", error);
-        });
-    }
-
     renderMarker(data) {
         let marker = this.leafletMarkers.get(data.id);
         
+        const popupContent = `
+            <div class="custom-popup">
+                <h4 style="margin:0 0 5px 0;">${data.title || 'Marker'}</h4>
+                <p style="margin:0;">${data.description || ''}</p>
+                <button class="edit-marker-btn" data-id="${data.id}" style="margin-top:10px; font-size:12px; cursor:pointer;">Edit</button>
+            </div>
+        `;
+
         if (marker) {
-            // Update existing
             marker.setLatLng([data.lat, data.lng]);
-            const popupContent = `
-                <div class="custom-popup">
-                    <h4 style="margin:0 0 5px 0;">${data.title || 'Marker'}</h4>
-                    <p style="margin:0;">${data.description || ''}</p>
-                    <button class="edit-marker-btn" data-id="${data.id}" style="margin-top:10px; font-size:12px; cursor:pointer;">Edit</button>
-                </div>
-            `;
             marker.getPopup().setContent(popupContent);
         } else {
-            // Create new
             marker = L.marker([data.lat, data.lng], {
                 icon: this.mapManager.defaultIcon
             }).addTo(this.mapManager.map);
             
-            const popupContent = `
-                <div class="custom-popup">
-                    <h4 style="margin:0 0 5px 0;">${data.title || 'Marker'}</h4>
-                    <p style="margin:0;">${data.description || ''}</p>
-                    <button class="edit-marker-btn" data-id="${data.id}" style="margin-top:10px; font-size:12px; cursor:pointer;">Edit</button>
-                </div>
-            `;
-            
             marker.bindPopup(popupContent);
             
-            // Handle popup events to attach listeners to the edit button
             marker.on('popupopen', () => {
                 const editBtn = document.querySelector(`.edit-marker-btn[data-id="${data.id}"]`);
                 if (editBtn) {
@@ -238,7 +317,7 @@ class LayerManager {
         }
     }
 
-    removeMarker(id) {
+    removeMarkerLocal(id) {
         const marker = this.leafletMarkers.get(id);
         if (marker) {
             this.mapManager.map.removeLayer(marker);
@@ -249,40 +328,48 @@ class LayerManager {
 
     async addMarker(lat, lng, title = '', description = '') {
         try {
-            await this.db.collection('markers').add({
-                lat,
-                lng,
-                title,
-                description,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            const id = 'marker_' + Date.now();
+            const { error } = await this.supabase
+                .from('markers')
+                .insert([{ id, lat, lng, title, description }]);
+            
+            if (error) throw error;
             return true;
-        } catch (error) {
-            console.error("Error adding marker", error);
+        } catch (err) {
+            console.error("Error adding marker:", err);
+            window.showToast("Failed to add marker", true);
             return false;
         }
     }
 
     async updateMarker(id, title, description) {
         try {
-            await this.db.collection('markers').doc(id).update({
-                title,
-                description,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
+            const { error } = await this.supabase
+                .from('markers')
+                .update({ title, description })
+                .eq('id', id);
+            
+            if (error) throw error;
             return true;
-        } catch (error) {
-            console.error("Error updating marker", error);
+        } catch (err) {
+            console.error("Error updating marker:", err);
+            window.showToast("Failed to update marker", true);
             return false;
         }
     }
 
     async deleteMarker(id) {
         try {
-            await this.db.collection('markers').doc(id).delete();
+            const { error } = await this.supabase
+                .from('markers')
+                .delete()
+                .eq('id', id);
+            
+            if (error) throw error;
             return true;
-        } catch (error) {
-            console.error("Error deleting marker", error);
+        } catch (err) {
+            console.error("Error deleting marker:", err);
+            window.showToast("Failed to delete marker", true);
             return false;
         }
     }

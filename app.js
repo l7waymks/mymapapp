@@ -21,9 +21,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Initialize Managers
     const mapManager = new window.MapManager();
-    const layerManager = new window.LayerManager(mapManager, window.db);
+    const layerManager = new window.LayerManager(mapManager);
     window.layerManager = layerManager; // Expose globally for importer
-    const geojsonImporter = new window.GeoJsonImporter(window.db);
+    const geojsonImporter = new window.GeoJsonImporter();
 
     // 3. UI Setup
     setupUI(mapManager, layerManager);
@@ -217,7 +217,7 @@ function setupModals(layerManager) {
             await layerManager.updateLayerStyle(currentStyleLayerId, style);
             // Also update name if needed
             if (name) {
-                await window.db.collection('layers').doc(currentStyleLayerId).update({name: name});
+                await layerManager.updateLayerStyle(currentStyleLayerId, style, name);
             }
             styleModal.classList.add('hidden');
         }
@@ -287,7 +287,7 @@ function updateLayersList(layers, layerManager) {
 
         // Add events
         item.querySelector('.toggle-vis').addEventListener('click', async () => {
-            await window.db.collection('layers').doc(layer.id).update({visible: !isVisible});
+            await layerManager.toggleLayerVisibility(layer.id, !isVisible);
         });
         
         item.querySelector('.edit-style').addEventListener('click', () => {
