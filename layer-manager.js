@@ -126,7 +126,21 @@ class LayerManager {
         };
 
         if (leafletLayer) {
-            leafletLayer.setStyle(style);
+            // Update styles dynamically: lines/polygons get the layer style, points keep category colors
+            leafletLayer.eachLayer(layer => {
+                if (layer instanceof L.CircleMarker) {
+                    const catStyle = this.getCategoryStyle(layer.feature);
+                    layer.setStyle({
+                        fillColor: catStyle.fillColor,
+                        color: catStyle.color,
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.85
+                    });
+                } else if (layer.setStyle) {
+                    layer.setStyle(style);
+                }
+            });
             
             if (layerData.visible && !this.mapManager.map.hasLayer(leafletLayer)) {
                 this.mapManager.map.addLayer(leafletLayer);
@@ -138,21 +152,43 @@ class LayerManager {
 
         // Create new layer
         leafletLayer = L.geoJSON(null, {
-            style: style,
+            style: (feature) => {
+                if (feature && feature.geometry && feature.geometry.type === 'Point') {
+                    const catStyle = this.getCategoryStyle(feature);
+                    return {
+                        fillColor: catStyle.fillColor,
+                        color: catStyle.color,
+                        weight: 2,
+                        opacity: 1,
+                        fillOpacity: 0.85
+                    };
+                }
+                return style;
+            },
             pointToLayer: (feature, latlng) => {
+                const catStyle = this.getCategoryStyle(feature);
                 return L.circleMarker(latlng, {
-                    radius: 8,
-                    fillColor: style.fillColor,
-                    color: style.color,
-                    weight: style.weight,
-                    opacity: style.opacity,
-                    fillOpacity: style.fillOpacity
+                    radius: catStyle.radius || 9
                 });
             },
             onEachFeature: (feature, layer) => {
-                if (feature.properties && feature.properties.name) {
-                    layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
-                }
+                const props = feature.properties || {};
+                const catInfo = this.getCategoryInfo(feature);
+                const name = props.name || props.NAME || props.nom || 'غير محدد';
+                const type = props.type || props.amenity || props.category || props.shop || '';
+                
+                layer.bindPopup(`
+                    <div style="font-family:'Noto Sans Arabic',sans-serif; min-width:160px;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                            <span style="font-size:1.4rem;">${catInfo.icon}</span>
+                            <div>
+                                <strong style="display:block;font-size:0.9rem;">${name}</strong>
+                                <span style="font-size:0.75rem;color:${catInfo.color};font-weight:600;">${catInfo.label}</span>
+                            </div>
+                        </div>
+                        ${type ? `<div style="font-size:0.75rem;color:#94a3b8;">النوع: ${type}</div>` : ''}
+                    </div>
+                `);
             }
         });
 
@@ -197,6 +233,74 @@ class LayerManager {
                 properties: properties
             };
         }).filter(Boolean);
+    }
+
+    // ---- Category Color System ----
+    // Detects feature type from properties and returns style/info
+    
+    // All supported categories
+    static get CATEGORIES() {
+        return {
+            // عيادة بيطرية
+            vet:       { color: '#ef4444', fillColor: '#ef4444', radius: 10, icon: '🏥', label: 'عيادة بيطرية' },
+            // متجر حيوانات
+            pet_shop:  { color: '#f97316', fillColor: '#f97316', radius: 10, icon: '🐾', label: 'متجر حيوانات' },
+            // ملجأ / إيواء
+            shelter:   { color: '#8b5cf6', fillColor: '#8b5cf6', radius: 10, icon: '🏠', label: 'ملجأ حيوانات' },
+            // حديقة حيوانات
+            zoo:       { color: '#10b981', fillColor: '#10b981', radius: 10, icon: '🦁', label: 'حديقة حيوانات' },
+            // حلاقة وتجميل
+            grooming:  { color: '#ec4899', fillColor: '#ec4899', radius: 10, icon: '✂️', label: 'صالون تجميل' },
+            // تدريب حيوانات
+            training:  { color: '#3b82f6', fillColor: '#3b82f6', radius: 10, icon: '🎾', label: 'مركز تدريب' },
+            // مطعم / كافيه
+            cafe:      { color: '#f59e0b', fillColor: '#f59e0b', radius: 10, icon: '☕', label: 'مقهى' },
+            // حديقة / متنزه
+            park:      { color: '#22c55e', fillColor: '#22c55e', radius: 10, icon: '🌳', label: 'حديقة عامة' },
+            // افتراضي
+            default:   { color: '#64748b', fillColor: '#64748b', radius: 8,  icon: '📍', label: 'مكان' },
+        };
+    }
+
+    _detectCategory(feature) {
+        const props = feature.properties || {};
+        // Try every common key
+        const val = (
+            props.amenity || props.shop || props.type || props.category ||
+            props.fclass || props.class || props.leisure || props.tourism || ''
+        ).toString().toLowerCase().trim();
+
+        // Arabic keywords matching
+        const arabicVal = (props.name || props.NAME || '').toString().toLowerCase();
+
+        if (val.includes('vet') || val.includes('veterinary') || arabicVal.includes('بيطر') || arabicVal.includes('عيادة')) 
+            return 'vet';
+        if (val.includes('pet_shop') || val.includes('pet') || arabicVal.includes('متجر') || arabicVal.includes('حيوان'))
+            return 'pet_shop';
+        if (val.includes('shelter') || val.includes('rescue') || arabicVal.includes('ملجأ') || arabicVal.includes('إيواء') || arabicVal.includes('انقاذ'))
+            return 'shelter';
+        if (val.includes('zoo') || val.includes('aquarium') || arabicVal.includes('حديقة حيوان') || arabicVal.includes('أكواريوم'))
+            return 'zoo';
+        if (val.includes('groom') || arabicVal.includes('تجميل') || arabicVal.includes('حلاقة'))
+            return 'grooming';
+        if (val.includes('train') || arabicVal.includes('تدريب'))
+            return 'training';
+        if (val.includes('cafe') || val.includes('restaurant') || arabicVal.includes('كافيه') || arabicVal.includes('مطعم'))
+            return 'cafe';
+        if (val.includes('park') || val.includes('garden') || arabicVal.includes('حديقة') || arabicVal.includes('متنزه'))
+            return 'park';
+
+        return 'default';
+    }
+
+    getCategoryStyle(feature) {
+        const cat = this._detectCategory(feature);
+        return LayerManager.CATEGORIES[cat] || LayerManager.CATEGORIES.default;
+    }
+
+    getCategoryInfo(feature) {
+        const cat = this._detectCategory(feature);
+        return LayerManager.CATEGORIES[cat] || LayerManager.CATEGORIES.default;
     }
 
     fitAllLayers() {

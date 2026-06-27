@@ -244,6 +244,48 @@
             font-weight: 600;
         }
 
+        /* Legend */
+        .viewer-legend {
+            position: absolute;
+            bottom: 60px;
+            left: 16px;
+            z-index: 1000;
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            padding: 12px 14px;
+            border-radius: var(--radius);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            font-size: 0.72rem;
+            min-width: 160px;
+        }
+
+        .legend-title {
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
         /* Zoom Controls */
         .viewer-zoom {
             position: absolute;
@@ -384,6 +426,19 @@
             </div>
         </div>
 
+        <!-- Legend -->
+        <div class="viewer-legend" id="legend-panel">
+            <div class="legend-title">🐾 أنواع الأماكن</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div><span>🏥 عيادة بيطرية</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div><span>🐾 متجر حيوانات</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6"></div><span>🏠 ملجأ حيوانات</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div><span>🦁 حديقة حيوانات</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ec4899"></div><span>✂️ صالون تجميل</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div><span>🎾 مركز تدريب</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div><span>🌳 حديقة عامة</span></div>
+            <div class="legend-item"><div class="legend-dot" style="background:#64748b"></div><span>📍 مكان آخر</span></div>
+        </div>
+
         <!-- Zoom Controls -->
         <div class="viewer-zoom">
             <button class="zoom-btn" id="zoom-in">+</button>
@@ -510,6 +565,38 @@
             }).filter(Boolean);
         }
 
+        // Category detection system
+        const CATEGORIES = {
+            vet:      { color: '#ef4444', fillColor: '#ef4444', radius: 10, icon: '🏥', label: 'عيادة بيطرية' },
+            pet_shop: { color: '#f97316', fillColor: '#f97316', radius: 10, icon: '🐾', label: 'متجر حيوانات' },
+            shelter:  { color: '#8b5cf6', fillColor: '#8b5cf6', radius: 10, icon: '🏠', label: 'ملجأ حيوانات' },
+            zoo:      { color: '#10b981', fillColor: '#10b981', radius: 10, icon: '🦁', label: 'حديقة حيوانات' },
+            grooming: { color: '#ec4899', fillColor: '#ec4899', radius: 10, icon: '✂️', label: 'صالون تجميل' },
+            training: { color: '#3b82f6', fillColor: '#3b82f6', radius: 10, icon: '🎾', label: 'مركز تدريب' },
+            cafe:     { color: '#f59e0b', fillColor: '#f59e0b', radius: 10, icon: '☕', label: 'مقهى' },
+            park:     { color: '#22c55e', fillColor: '#22c55e', radius: 10, icon: '🌳', label: 'حديقة عامة' },
+            default:  { color: '#64748b', fillColor: '#64748b', radius: 8,  icon: '📍', label: 'مكان' },
+        };
+
+        function detectCategory(feature) {
+            const props = feature.properties || {};
+            const val = (
+                props.amenity || props.shop || props.type || props.category ||
+                props.fclass || props.class || props.leisure || props.tourism || ''
+            ).toString().toLowerCase();
+            const ar = (props.name || props.NAME || '').toString().toLowerCase();
+
+            if (val.includes('vet') || val.includes('veterinary') || ar.includes('بيطر') || ar.includes('عيادة')) return 'vet';
+            if (val.includes('pet_shop') || val.includes('pet') || ar.includes('متجر') || ar.includes('حيوان')) return 'pet_shop';
+            if (val.includes('shelter') || val.includes('rescue') || ar.includes('ملجأ') || ar.includes('إيواء')) return 'shelter';
+            if (val.includes('zoo') || val.includes('aquarium') || ar.includes('حديقة حيوان')) return 'zoo';
+            if (val.includes('groom') || ar.includes('تجميل') || ar.includes('حلاقة')) return 'grooming';
+            if (val.includes('train') || ar.includes('تدريب')) return 'training';
+            if (val.includes('cafe') || val.includes('restaurant') || ar.includes('كافيه') || ar.includes('مطعم')) return 'cafe';
+            if (val.includes('park') || val.includes('garden') || ar.includes('حديقة') || ar.includes('متنزه')) return 'park';
+            return 'default';
+        }
+
         // Render Layer
         function renderLayer(layerData) {
             let leafletLayer = leafletLayers.get(layerData.id);
@@ -522,22 +609,63 @@
             };
 
             if (leafletLayer) {
-                leafletLayer.setStyle(style);
+                // Update styles dynamically: lines/polygons get the layer style, points keep category colors
+                leafletLayer.eachLayer(layer => {
+                    if (layer instanceof L.CircleMarker) {
+                        const cat = CATEGORIES[detectCategory(layer.feature)];
+                        layer.setStyle({
+                            fillColor: cat.fillColor,
+                            color: cat.color,
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.85
+                        });
+                    } else if (layer.setStyle) {
+                        layer.setStyle(style);
+                    }
+                });
                 if (layerData.visible && !map.hasLayer(leafletLayer)) map.addLayer(leafletLayer);
                 else if (!layerData.visible && map.hasLayer(leafletLayer)) map.removeLayer(leafletLayer);
                 return;
             }
 
             leafletLayer = L.geoJSON(null, {
-                style: style,
-                pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-                    radius: 8, fillColor: style.fillColor, color: style.color,
-                    weight: style.weight, opacity: style.opacity, fillOpacity: style.fillOpacity
-                }),
-                onEachFeature: (feature, layer) => {
-                    if (feature.properties?.name) {
-                        layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
+                style: (feature) => {
+                    if (feature && feature.geometry && feature.geometry.type === 'Point') {
+                        const cat = CATEGORIES[detectCategory(feature)];
+                        return {
+                            fillColor: cat.fillColor,
+                            color: cat.color,
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.85
+                        };
                     }
+                    return style;
+                },
+                pointToLayer: (feature, latlng) => {
+                    const cat = CATEGORIES[detectCategory(feature)];
+                    return L.circleMarker(latlng, {
+                        radius: cat.radius
+                    });
+                },
+                onEachFeature: (feature, layer) => {
+                    const props = feature.properties || {};
+                    const cat = CATEGORIES[detectCategory(feature)];
+                    const name = props.name || props.NAME || props.nom || 'غير محدد';
+                    const type = props.type || props.amenity || props.shop || '';
+                    layer.bindPopup(`
+                        <div style="font-family:'Noto Sans Arabic',sans-serif;min-width:160px;">
+                            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                                <span style="font-size:1.4rem;">${cat.icon}</span>
+                                <div>
+                                    <strong style="display:block;font-size:0.9rem;">${name}</strong>
+                                    <span style="font-size:0.75rem;color:${cat.color};font-weight:600;">${cat.label}</span>
+                                </div>
+                            </div>
+                            ${type ? `<div style="font-size:0.75rem;color:#94a3b8;">النوع: ${type}</div>` : ''}
+                        </div>
+                    `);
                 }
             });
 
