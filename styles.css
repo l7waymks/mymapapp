@@ -70,20 +70,21 @@ html[dir="rtl"] body {
 /* Sidebar */
 .sidebar {
     width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
     background: var(--bg-dark);
     border-inline-end: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     z-index: var(--z-ui);
     transition: var(--transition);
+    overflow: hidden;
 }
 
 .sidebar.closed {
-    transform: translateX(-100%);
-}
-
-html[dir="rtl"] .sidebar.closed {
-    transform: translateX(100%);
+    width: 0;
+    min-width: 0;
+    border: none;
+    padding: 0;
 }
 
 .sidebar-header {

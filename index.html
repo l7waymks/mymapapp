@@ -37,7 +37,7 @@
     <!-- Main Application -->
     <div id="app" class="app-container hidden">
         <!-- Sidebar -->
-        <aside id="sidebar" class="sidebar">
+        <aside id="sidebar" class="sidebar closed">
             <!-- Sidebar Header -->
             <div class="sidebar-header">
                 <div class="brand">
@@ -58,17 +58,7 @@
                 </button>
             </div>
 
-            <!-- Connected Users -->
-            <div class="sidebar-section" id="users-section">
-                <div class="section-header">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span data-i18n="connected_users">Connected Users</span>
-                </div>
-                <div class="users-bar">
-                    <div class="user-avatars" id="user-avatars"></div>
-                    <span class="user-count" id="user-count">1 <span data-i18n="online">online</span></span>
-                </div>
-            </div>
+
 
             <!-- Layer Controls -->
             <div class="sidebar-section">
@@ -96,21 +86,7 @@
                 </div>
             </div>
 
-            <!-- Markers Section -->
-            <div class="sidebar-section">
-                <div class="section-header">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <span data-i18n="markers">Markers</span>
-                    <span class="layer-count-badge" id="marker-count-badge">0</span>
-                </div>
-                <div class="markers-list" id="markers-list">
-                    <div class="empty-state" id="markers-empty">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" opacity="0.3"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
-                        <p data-i18n="no_markers">No markers yet</p>
-                        <p class="empty-hint" data-i18n="marker_hint">Click "Add Marker" then click on the map</p>
-                    </div>
-                </div>
-            </div>
+
 
             <!-- Sidebar Footer -->
             <div class="sidebar-footer">
