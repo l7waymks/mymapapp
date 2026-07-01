@@ -40,7 +40,12 @@ const translations = {
         toast_marker_added: "Marker added",
         toast_marker_deleted: "Marker deleted",
         toast_marker_updated: "Marker updated",
-        toast_error: "An error occurred"
+        toast_error: "An error occurred",
+        password_required: "Password Required",
+        password_desc: "This is a private site. Please enter the password to access.",
+        password_placeholder: "Enter password...",
+        password_submit: "Enter App",
+        password_error: "Incorrect password, please try again"
     },
     ar: {
         loading_subtitle: "جاري تهيئة الخرائط التفاعلية...",
@@ -82,7 +87,12 @@ const translations = {
         toast_marker_added: "تمت إضافة العلامة",
         toast_marker_deleted: "تم حذف العلامة",
         toast_marker_updated: "تم تحديث العلامة",
-        toast_error: "حدث خطأ"
+        toast_error: "حدث خطأ",
+        password_required: "مطلوب كلمة المرور",
+        password_desc: "هذا الموقع خاص. يرجى إدخال كلمة المرور للوصول إليه.",
+        password_placeholder: "أدخل كلمة المرور...",
+        password_submit: "دخول التطبيق",
+        password_error: "كلمة المرور غير صحيحة، يرجى المحاولة مرة أخرى"
     }
 };
 
@@ -95,10 +105,18 @@ class I18nManager {
     init() {
         this.applyLanguage(this.currentLang);
         
-        // Setup toggle button
+        // Setup toggle buttons
         const toggleBtn = document.getElementById('lang-toggle-btn');
         if (toggleBtn) {
             toggleBtn.addEventListener('click', () => {
+                this.currentLang = this.currentLang === 'en' ? 'ar' : 'en';
+                this.applyLanguage(this.currentLang);
+            });
+        }
+
+        const passwordToggleBtn = document.getElementById('password-lang-toggle-btn');
+        if (passwordToggleBtn) {
+            passwordToggleBtn.addEventListener('click', () => {
                 this.currentLang = this.currentLang === 'en' ? 'ar' : 'en';
                 this.applyLanguage(this.currentLang);
             });
@@ -117,6 +135,11 @@ class I18nManager {
         const langLabel = document.getElementById('lang-label');
         if (langLabel) {
             langLabel.textContent = lang === 'en' ? 'العربية' : 'English';
+        }
+
+        const passwordLangLabel = document.getElementById('password-lang-label');
+        if (passwordLangLabel) {
+            passwordLangLabel.textContent = lang === 'en' ? 'العربية' : 'English';
         }
 
         // Update all elements with data-i18n attribute

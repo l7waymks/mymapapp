@@ -27,21 +27,102 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. UI Setup
     setupUI(mapManager, layerManager);
+    setupPasswordGate(mapManager);
+});
+
+function setupPasswordGate(mapManager) {
+    const loader = document.getElementById('loading-screen');
+    const passwordScreen = document.getElementById('password-screen');
+    const app = document.getElementById('app');
     
-    // Hide loading screen after a short delay to simulate initialization
+    const passwordInput = document.getElementById('password-input-field');
+    const passwordSubmit = document.getElementById('password-submit');
+    const passwordToggleVisibility = document.getElementById('password-toggle-visibility');
+    const eyeIcon = document.getElementById('eye-icon');
+    const passwordError = document.getElementById('password-error');
+    
+    const CORRECT_PASSWORD = 'yassine0902008';
+    
+    // Check if already authenticated in this session
+    const isAuth = sessionStorage.getItem('geosync_auth') === 'true';
+    
     setTimeout(() => {
-        const loader = document.getElementById('loading-screen');
-        const app = document.getElementById('app');
-        if (loader && app) {
-            loader.style.opacity = '0';
-            setTimeout(() => {
-                loader.style.display = 'none';
-                app.classList.remove('hidden');
-                mapManager.map.invalidateSize(); // Fix map rendering issue when hidden
-            }, 500);
+        if (isAuth) {
+            // Already authenticated, directly show the app
+            if (loader && app) {
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    app.classList.remove('hidden');
+                    mapManager.map.invalidateSize();
+                }, 500);
+            }
+        } else {
+            // Show password screen
+            if (loader && passwordScreen) {
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    passwordScreen.classList.remove('hidden');
+                    passwordInput?.focus();
+                }, 500);
+            }
         }
     }, 1000);
-});
+    
+    // Toggle password visibility
+    passwordToggleVisibility?.addEventListener('click', () => {
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.innerHTML = `
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" x2="23" y1="1" y2="23"/>
+            `;
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.innerHTML = `
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+            `;
+        }
+    });
+    
+    // Submit password function
+    const submitPassword = () => {
+        const entered = passwordInput?.value;
+        if (entered === CORRECT_PASSWORD) {
+            sessionStorage.setItem('geosync_auth', 'true');
+            passwordError?.classList.remove('visible');
+            
+            // Success animation
+            passwordScreen.classList.add('hidden');
+            setTimeout(() => {
+                app?.classList.remove('hidden');
+                mapManager.map.invalidateSize();
+            }, 500);
+        } else {
+            // Show error
+            passwordError?.classList.add('visible');
+            
+            // Shake effect
+            const card = document.querySelector('.password-card');
+            if (card) {
+                card.style.animation = 'none';
+                void card.offsetWidth; // Trigger reflow
+                card.style.animation = 'shake 0.4s ease-in-out';
+            }
+            passwordInput?.focus();
+            passwordInput?.select();
+        }
+    };
+    
+    passwordSubmit?.addEventListener('click', submitPassword);
+    passwordInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            submitPassword();
+        }
+    });
+}
 
 function setupUI(mapManager, layerManager) {
     // Sidebar Toggle
